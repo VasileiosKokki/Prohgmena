@@ -7,6 +7,7 @@
 #include <string.h>
 #include <signal.h>
 #include <semaphore.h>
+#include <sys/select.h>
 
 
 int child_count; // Adjust this to your desired number of children
