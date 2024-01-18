@@ -7,6 +7,7 @@
 #include <string.h>
 #include <signal.h>
 #include <semaphore.h>
+#include <sys/select.h>
 
 
 int child_count; // Adjust this to your desired number of children
@@ -51,6 +52,26 @@ void parent_process1(int pipe_fd, int done_pipe_fd, int i) {
 
 void parent_process2(int pipe_fd, int done_pipe_fd, int i) {
     char message[100];
+
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(done_pipe_fd, &read_fds);
+    
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // Set your desired timeout in seconds
+    timeout.tv_usec = 0;
+
+    int select_result = select(done_pipe_fd + 1, &read_fds, NULL, NULL, &timeout);
+    if (select_result == -1) {
+        perror("select");
+        exit(1);
+    } else if (select_result == 0) {
+        printf("Timeout occurred. No data available for reading.\n");
+        // Handle timeout logic if needed
+    } else {
+
+
     // Read the message from the pipe
     char done_msg[100];
     ssize_t bytes_read = read(done_pipe_fd, done_msg, sizeof(done_msg));
@@ -72,6 +93,7 @@ void parent_process2(int pipe_fd, int done_pipe_fd, int i) {
     }
     sprintf(message, "Done received from '%s'", message_after_colon);
     write(pipe_fd, message, strlen(message));
+    }
 }
 
 
