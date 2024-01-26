@@ -5,15 +5,222 @@
  */
 
 #include "add.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <string.h>
+#include <signal.h>
+#include <semaphore.h>
+#include <sys/select.h>
+
+
+
+
+
+int parent_process(int pipe_fd, int done_pipe_fd, int i, int number1, int number2) {
+
+	char message[100];
+    // Format the message with the child number
+    sprintf(message, "Hello child, I am your father and I call you: 'Slave %d', calculate for me: %d + %d", i, number1, number2);
+    write(pipe_fd, message, strlen(message));
+
+
+
+	fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(done_pipe_fd, &read_fds);
+    
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // Set your desired timeout in seconds
+    timeout.tv_usec = 0;
+
+    int select_result = select(done_pipe_fd + 1, &read_fds, NULL, NULL, &timeout);
+    if (select_result == -1) {
+        perror("select");
+        exit(1);
+    } else if (select_result == 0) {
+        printf("Timeout occurred. No data available for reading.\n");
+		return 0;
+        // Handle timeout logic if needed
+    } else {
+
+
+
+	// Read the message from the pipe
+	char done_msg[100];
+	ssize_t bytes_read = read(done_pipe_fd, done_msg, sizeof(done_msg));
+	if (bytes_read == -1) {
+		perror("read");
+		exit(1);
+	}
+	done_msg[bytes_read] = '\0';
+	printf("%s\n", done_msg);
+
+	int result;
+	sscanf(done_msg, "Child 'Slave %*d' is done and result is %d", &result) == 1;
+        
+    
+
+	// Find the position of "'" in the message
+	char *colon_position = strchr(done_msg, '\'');
+	char *message_after_colon;
+	if (colon_position != NULL) {
+		message_after_colon = colon_position + 1; // Skip "' " or "'"
+	}
+	char *quote_position = strchr(message_after_colon, '\'');
+	if (quote_position != NULL) {
+		*quote_position = '\0'; // Null-terminate the string at the single quote position
+	}
+	sprintf(message, "Done received from '%s'", message_after_colon);
+	write(pipe_fd, message, strlen(message));
+
+	
+	return result;
+
+	}
+    
+}
+
+
+
+void child_process(int pipe_fd, int done_pipe_fd, int file_fd) {
+
+    
+    // Read the message from the pipe
+    char message[100];
+    ssize_t bytes_read = read(pipe_fd, message, sizeof(message));
+    if (bytes_read == -1) {
+        perror("read");
+        exit(1);
+    }
+    message[bytes_read] = '\0';
+
+
+    // Print child's name and PID to the file
+    printf("%s\n", message);
+
+    // Find the position of ":" in the message
+    char *colon_position = strchr(message, ':');
+    if (colon_position == NULL) {
+        printf("Invalid message format: %s\n", message);
+        exit(1);
+    }
+
+    // Extract the part of the message after ":"
+    char *message_after_colon = colon_position + 2; // Skip ": " or ":"
+
+	
+	char *plus_position = strchr(message_after_colon, ':');
+	char *message_before_plus = plus_position + 2;
+	int operand1, operand2, result;
+	// printf("%s\n",message_before_plus);
+	if (sscanf(message_before_plus, "%d + %d", &operand1, &operand2) == 2) {
+		result = operand1 + operand2;
+    }
+
+
+	char *comma_position = strchr(message_after_colon, ',');
+	*comma_position = '\0';
+
+
+    char message2[100];
+    // Format the message with the child number
+    sprintf(message2, "Child %s is done and result is %d", message_after_colon, result);
+    // Notify the father process that printing is done
+    write(done_pipe_fd, message2, strlen(message2));
+
+
+
+    // Read the message from the pipe
+    char message3[100];
+    ssize_t bytes_read2 = read(pipe_fd, message3, sizeof(message3));
+    if (bytes_read2 == -1) {
+        perror("read");
+        exit(1);
+    }
+    message3[bytes_read2] = '\0';
+
+
+    // Print final message from parent
+    printf("%s\n", message3);
+    
+}
+
+
+
+int setup(int number1, int number2){
+
+
+	int child_count = 8; // Number of child processes specified by the user
+	int result;
+	int pipes[child_count][2]; // Array of pipes for communication
+	int done_pipes[child_count][2]; // Array of pipes for child completion notification
+
+
+	// Create pipes for communication with children
+	for (int i = 0; i < child_count; i++) {
+		if (pipe(pipes[i]) == -1 || pipe(done_pipes[i]) == -1) {
+			perror("pipe");
+			exit(1);
+		}
+	}
+
+
+	// Fork child processes
+    for (int i = 0; i < child_count; i++) {
+        pid_t child_pid = fork();
+        if (child_pid == -1) {
+            perror("fork");
+            exit(1);
+        } else if (child_pid > 0) {                
+
+            close(pipes[i][0]); // Close the read end of the communication pipe
+            close(done_pipes[i][1]); // Close the write end of the communication2 pipe
+            result = parent_process(pipes[i][1], done_pipes[i][0], i, number1, number2);
+			close(pipes[i][1]); // Close the read end of the communication2 pipe
+            close(done_pipes[i][0]); // Close the read end of the communication2 pipe
+            
+        } else {
+            
+            // This is the child process
+            close(pipes[i][1]); // Close the write end of the communication pipe
+            close(done_pipes[i][0]); // Close the read end of the communication2 pipe
+            child_process(pipes[i][0], done_pipes[i][1], i);
+            close(pipes[i][0]); // Close the read end of the communication pipe
+            close(done_pipes[i][1]); // Close the write end of the communication2 pipe
+
+            // sleep(20);
+            exit(0);
+        }
+    }
+
+	return result;
+
+
+}
+
 
 int *
 add_1_svc(numbers *argp, struct svc_req *rqstp)
 {
+
+	int number1 = argp->a;
+	int number2 = argp->b;
+
 	static int  result;
 
-	result = argp->a + argp->b;
-	printf("Got the client request\n");
+	printf("\n------- Got the client request -------\n");
+
+	result = setup(number1,number2);
+
+
+	// result = argp->a + argp->b;
 	
 
 	return &result;
 }
+
+

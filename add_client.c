@@ -8,7 +8,7 @@
 
 
 void
-add_prog_1(char *host)
+add_prog_1(char *host, int first, int second)
 {
 	CLIENT *clnt;
 	int  *result_1;
@@ -21,8 +21,8 @@ add_prog_1(char *host)
 		exit (1);
 	}
 	/* DEBUG */
-	add_1_arg.a = 10;  // Replace with your desired first number
-    add_1_arg.b = 20;  // Replace with your desired second number
+	add_1_arg.a = first;  // Replace with your desired first number
+    add_1_arg.b = second;  // Replace with your desired second number
 
 	result_1 = add_1(&add_1_arg, clnt);
 	if (result_1 == (int *) NULL) {
@@ -45,11 +45,11 @@ int
 main (int argc, char *argv[])
 {
 	char *host;
-	if (argc < 2) {
-		printf ("usage: %s server_host\n", argv[0]);
+	if (argc < 4) {
+		printf ("usage: %s server_host and 2 numbers\n", argv[0]);
 		exit (1);
 	}
 	host = argv[1];
-	add_prog_1 (host);
+	add_prog_1 (host, atoi(argv[2]), atoi(argv[3]));
 exit (0);
 }

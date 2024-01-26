@@ -144,7 +144,7 @@ void child_process(int pipe_fd, int done_pipe_fd, int file_fd) {
     message3[bytes_read2] = '\0';
 
 
-    // Print child's name and PID to the file
+    // Print final message from parent
     printf("%s\n", message3);
     
 }
