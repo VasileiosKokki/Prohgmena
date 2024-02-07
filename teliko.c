@@ -100,52 +100,83 @@ void parent_process2(int pipe_fd, int done_pipe_fd, int i) {
 
 void child_process(int pipe_fd, int done_pipe_fd, int file_fd) {
 
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(pipe_fd, &read_fds);
     
-    // Read the message from the pipe
-    char message[100];
-    ssize_t bytes_read = read(pipe_fd, message, sizeof(message));
-    if (bytes_read == -1) {
-        perror("read");
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // Set your desired timeout in seconds
+    timeout.tv_usec = 0;
+
+    int select_result = select(pipe_fd + 1, &read_fds, NULL, NULL, &timeout);
+    if (select_result == -1) {
+        perror("select");
         exit(1);
+    } else if (select_result == 0) {
+        printf("Timeout occurred. No data available for reading.\n");
+        // Handle timeout logic if needed
+    } else {
+
+    
+        // Read the message from the pipe
+        char message[100];
+        ssize_t bytes_read = read(pipe_fd, message, sizeof(message));
+        if (bytes_read == -1) {
+            perror("read");
+            exit(1);
+        }
+        message[bytes_read] = '\0';
+
+
+        // Print child's name and PID to the file
+        printf("%s\n", message);
+
+        // Find the position of ":" in the message
+        char *colon_position = strchr(message, ':');
+        if (colon_position == NULL) {
+            printf("Invalid message format: %s\n", message);
+            exit(1);
+        }
+
+        // Extract the part of the message after ":"
+        char *message_after_colon = colon_position + 2; // Skip ": " or ":"
+
+        dprintf(file_fd, "%d ---> %s\n", getpid(), message_after_colon); // Use dprintf to write to the file descriptor
+
+        char message2[100];
+        // Format the message with the child number
+        sprintf(message2, "Child %s is done", message_after_colon);
+        // Notify the father process that printing is done
+        write(done_pipe_fd, message2, strlen(message2));
+
+
+        
+
+
+        int select_result = select(pipe_fd + 1, &read_fds, NULL, NULL, &timeout);
+        if (select_result == -1) {
+            perror("select");
+            exit(1);
+        } else if (select_result == 0) {
+            printf("Timeout occurred. No data available for reading.\n");
+            // Handle timeout logic if needed
+        } else {
+
+            // Read the message from the pipe
+            char message3[100];
+            ssize_t bytes_read2 = read(pipe_fd, message3, sizeof(message3));
+            if (bytes_read2 == -1) {
+                perror("read");
+                exit(1);
+            }
+            message3[bytes_read2] = '\0';
+
+
+            // Print final message from parent
+            printf("%s\n", message3);
+        }
     }
-    message[bytes_read] = '\0';
-
-
-    // Print child's name and PID to the file
-    printf("%s\n", message);
-
-    // Find the position of ":" in the message
-    char *colon_position = strchr(message, ':');
-    if (colon_position == NULL) {
-        printf("Invalid message format: %s\n", message);
-        exit(1);
-    }
-
-    // Extract the part of the message after ":"
-    char *message_after_colon = colon_position + 2; // Skip ": " or ":"
-
-    dprintf(file_fd, "%d ---> %s\n", getpid(), message_after_colon); // Use dprintf to write to the file descriptor
-
-    char message2[100];
-    // Format the message with the child number
-    sprintf(message2, "Child %s is done", message_after_colon);
-    // Notify the father process that printing is done
-    write(done_pipe_fd, message2, strlen(message2));
-
-
-
-    // Read the message from the pipe
-    char message3[100];
-    ssize_t bytes_read2 = read(pipe_fd, message3, sizeof(message3));
-    if (bytes_read2 == -1) {
-        perror("read");
-        exit(1);
-    }
-    message3[bytes_read2] = '\0';
-
-
-    // Print final message from parent
-    printf("%s\n", message3);
     
 }
 
@@ -210,6 +241,7 @@ int main(int argc, char *argv[]) {
                 gonethroughere = 1;
                 dprintf(file_fd, "[PARENT] ---> %d\n", getpid());
                 signal(SIGALRM,(void (*)(int))kill_children);
+                signal(SIGINT,(void (*)(int))kill_children);  // Kaloume thn leitourgia sig_handler an dothei shma SIGINT
                 alarm(10);
             }          
          
@@ -244,7 +276,7 @@ int main(int argc, char *argv[]) {
     
 
     
-    signal(SIGINT,(void (*)(int))kill_children);  // Kaloume thn leitourgia sig_handler an dothei shma SIGINT
+    
     for (int i = 0; i < child_count; i++) {
         waitpid(child_pids[i], NULL, 0);
     }
