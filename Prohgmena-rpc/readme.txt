@@ -1,0 +1,1 @@
+Εκτελούμε την εντολή { make -f Makefile.add } αντί για την σύνηθες εντολή { gcc -pthread Makefile.add } Στη συνέχεια εκτελούμε την εντολή { ./add_server } και σε ένα άλλο terminal την εντολή { ./add_client localhost αριθμός_1 αριθμός_2 }  
